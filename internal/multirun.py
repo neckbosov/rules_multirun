@@ -29,10 +29,7 @@ def _run_command(command: Command, block: bool, **kwargs) -> Union[int, subproce
         args = [command.path] + command.args
     env = dict(os.environ)
     env.update(command.env)
-    if block:
-        return subprocess.check_call(args, env=env)
-    else:
-        return subprocess.Popen(args, env=env, **kwargs)
+    return subprocess.Popen(args, env=env, **kwargs)
 
 
 def _perform_concurrently(commands: List[Command], print_command: bool, buffer_output: bool) -> bool:
@@ -75,15 +72,17 @@ def _perform_serially(commands: List[Command], print_command: bool, keep_going: 
     for command in commands:
         if print_command:
             print(command.tag, flush=True)
-
+        process = _run_command(command, block=True)
         try:
-            _run_command(command, block=True)
-        except subprocess.CalledProcessError:
-            if keep_going:
-                success = False
-            else:
-                return False
+            process.wait()
+            if process.returncode != 0:
+                if keep_going:
+                    success = False
+                else:
+                    return False
         except KeyboardInterrupt:
+            process.kill()
+            process.wait()
             return True
 
     return success
